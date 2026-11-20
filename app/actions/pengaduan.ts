@@ -234,6 +234,7 @@ export async function getDetailPengaduan(pengaduanId: string) {
     where: { id: pengaduanId },
     include: {
       pelapor: { select: { id: true, nama: true, email: true } },
+      petugas: { select: { id: true, nama: true, email: true } },
       statusLogs: {
         orderBy: { createdAt: 'asc' },
         include: {
@@ -373,4 +374,278 @@ export async function tandaiSelesaiPelapor(pengaduanId: string, catatan?: string
     success: true,
     message: 'Pengaduan berhasil ditandai sebagai selesai.',
   }
+}
+
+// =============================================
+// FASE 3: SERVER ACTIONS UNTUK ADMIN
+// =============================================
+
+// 1. Ambil Semua Pengaduan untuk Admin (dengan search, filter, pagination)
+export async function getSemuaPengaduanAdmin(query?: {
+  cari?: string
+  status?: string
+  kategori?: string
+  periode?: string // 'hari_ini' | 'minggu_ini' | 'bulan_ini' | 'ALL'
+  page?: number
+  limit?: number
+}) {
+  const session = await auth()
+  if (session?.user?.role !== 'ADMIN') {
+    throw new Error('Akses ditolak: Hanya admin yang diizinkan.')
+  }
+
+  const page = Math.max(1, Number(query?.page) || 1)
+  const limit = Math.max(1, Number(query?.limit) || 10)
+  const skip = (page - 1) * limit
+
+  const whereClause: any = {}
+
+  // Filter pencarian
+  if (query?.cari && query.cari.trim() !== '') {
+    const search = query.cari.trim()
+    whereClause.OR = [
+      { judul: { contains: search, mode: 'insensitive' } },
+      { nomorTiket: { contains: search, mode: 'insensitive' } },
+      { deskripsi: { contains: search, mode: 'insensitive' } },
+      { pelapor: { nama: { contains: search, mode: 'insensitive' } } },
+      { pelapor: { email: { contains: search, mode: 'insensitive' } } },
+    ]
+  }
+
+  // Filter status
+  if (query?.status && query.status !== 'ALL') {
+    whereClause.status = query.status as StatusPengaduan
+  }
+
+  // Filter kategori
+  if (query?.kategori && query.kategori !== 'ALL') {
+    whereClause.kategori = query.kategori as KategoriPengaduan
+  }
+
+  // Filter periode
+  if (query?.periode && query.periode !== 'ALL') {
+    const now = new Date()
+    if (query.periode === 'hari_ini') {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      whereClause.createdAt = { gte: startOfDay }
+    } else if (query.periode === 'minggu_ini') {
+      const startOfWeek = new Date(now)
+      startOfWeek.setDate(now.getDate() - 7)
+      whereClause.createdAt = { gte: startOfWeek }
+    } else if (query.periode === 'bulan_ini') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      whereClause.createdAt = { gte: startOfMonth }
+    }
+  }
+
+  const [total, data] = await Promise.all([
+    prisma.pengaduan.count({ where: whereClause }),
+    prisma.pengaduan.findMany({
+      where: whereClause,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        pelapor: { select: { id: true, nama: true, email: true } },
+        petugas: { select: { id: true, nama: true } },
+        _count: { select: { pesan: true } },
+      },
+    }),
+  ])
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  }
+}
+
+// 2. Statistik Ringkasan Prioritas untuk Admin
+export async function getStatistikAdmin(filter?: { periode?: string; kategori?: string }) {
+  const session = await auth()
+  if (session?.user?.role !== 'ADMIN') {
+    throw new Error('Akses ditolak: Hanya admin yang diizinkan.')
+  }
+
+  const whereClause: any = {}
+
+  if (filter?.kategori && filter.kategori !== 'ALL') {
+    whereClause.kategori = filter.kategori as KategoriPengaduan
+  }
+
+  if (filter?.periode && filter.periode !== 'ALL') {
+    const now = new Date()
+    if (filter.periode === 'hari_ini') {
+      whereClause.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) }
+    } else if (filter.periode === 'minggu_ini') {
+      const past = new Date(now)
+      past.setDate(now.getDate() - 7)
+      whereClause.createdAt = { gte: past }
+    } else if (filter.periode === 'bulan_ini') {
+      whereClause.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), 1) }
+    }
+  }
+
+  // Ambil semua untuk hitung statistik dan breakdown
+  const semua = await prisma.pengaduan.findMany({
+    where: whereClause,
+    select: {
+      status: true,
+      kategori: true,
+      createdAt: true,
+    },
+  })
+
+  const total = semua.length
+  const baru = semua.filter((p) => p.status === 'BARU').length
+  const diproses = semua.filter((p) => p.status === 'DIPROSES').length
+  const selesai = semua.filter((p) => p.status === 'SELESAI').length
+  const ditolak = semua.filter((p) => p.status === 'DITOLAK').length
+
+  // Hitung Layanan Paling Sering Dilaporkan
+  const kategoriCounts: Record<string, number> = {
+    SARANA_PRASARANA: 0,
+    AKADEMIK: 0,
+    KEBERSIHAN: 0,
+    KEAMANAN: 0,
+    PELAYANAN_ADMINISTRASI: 0,
+    LAINNYA: 0,
+  }
+
+  semua.forEach((p) => {
+    if (kategoriCounts[p.kategori] !== undefined) {
+      kategoriCounts[p.kategori]++
+    }
+  })
+
+  const kategoriUrut = Object.entries(kategoriCounts)
+    .map(([kategori, count]) => ({
+      kategori: kategori as KategoriPengaduan,
+      count,
+      persentase: total > 0 ? Math.round((count / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  return {
+    total,
+    baru,
+    diproses,
+    selesai,
+    ditolak,
+    kategoriUrut,
+  }
+}
+
+// 3. Ubah Status Pengaduan + Catatan Resmi oleh Admin
+export async function ubahStatusPengaduanAdmin(formData: FormData) {
+  const session = await auth()
+  if (session?.user?.role !== 'ADMIN') {
+    return { success: false, message: 'Akses ditolak.' }
+  }
+
+  const pengaduanId = formData.get('pengaduanId') as string
+  const statusBaru = formData.get('statusBaru') as StatusPengaduan
+  const catatan = (formData.get('catatan') as string)?.trim()
+
+  if (!pengaduanId || !statusBaru) {
+    return { success: false, message: 'Data tidak lengkap.' }
+  }
+
+  const pengaduan = await prisma.pengaduan.findUnique({
+    where: { id: pengaduanId },
+  })
+
+  if (!pengaduan) {
+    return { success: false, message: 'Pengaduan tidak ditemukan.' }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.pengaduan.update({
+      where: { id: pengaduanId },
+      data: { status: statusBaru },
+    })
+
+    await tx.statusLog.create({
+      data: {
+        pengaduanId,
+        statusLama: pengaduan.status,
+        statusBaru,
+        catatan: catatan || `Status diubah menjadi ${statusBaru} oleh Admin.`,
+        userId: session.user.id,
+      },
+    })
+  })
+
+  revalidatePath(`/admin/pengaduan/${pengaduanId}`)
+  revalidatePath('/admin/pengaduan')
+  revalidatePath('/admin')
+  revalidatePath(`/pengaduan/${pengaduanId}`)
+  revalidatePath('/dasbor')
+
+  return {
+    success: true,
+    message: `Status berhasil diperbarui menjadi ${statusBaru}.`,
+  }
+}
+
+// 4. Tugaskan Petugas / Unit oleh Admin
+export async function tugaskanPetugasAdmin(pengaduanId: string, petugasId: string | null) {
+  const session = await auth()
+  if (session?.user?.role !== 'ADMIN') {
+    return { success: false, message: 'Akses ditolak.' }
+  }
+
+  const pengaduan = await prisma.pengaduan.findUnique({
+    where: { id: pengaduanId },
+    include: { petugas: true },
+  })
+
+  if (!pengaduan) {
+    return { success: false, message: 'Pengaduan tidak ditemukan.' }
+  }
+
+  let namaPetugasBaru = 'Belum Ditugaskan'
+  if (petugasId) {
+    const p = await prisma.user.findUnique({ where: { id: petugasId } })
+    if (p) namaPetugasBaru = p.nama
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.pengaduan.update({
+      where: { id: pengaduanId },
+      data: { petugasId },
+    })
+
+    await tx.statusLog.create({
+      data: {
+        pengaduanId,
+        statusLama: pengaduan.status,
+        statusBaru: pengaduan.status,
+        catatan: `Penugasan penanganan diperbarui: ${namaPetugasBaru}.`,
+        userId: session.user.id,
+      },
+    })
+  })
+
+  revalidatePath(`/admin/pengaduan/${pengaduanId}`)
+  revalidatePath('/admin/pengaduan')
+
+  return {
+    success: true,
+    message: `Petugas penanggung jawab berhasil diperbarui.`,
+  }
+}
+
+// 5. Ambil Daftar Seluruh Petugas (Admin) untuk Dropdown Penugasan
+export async function getDaftarPetugasAdmin() {
+  const session = await auth()
+  if (session?.user?.role !== 'ADMIN') return []
+
+  return prisma.user.findMany({
+    where: { role: 'ADMIN' },
+    select: { id: true, nama: true, email: true },
+    orderBy: { nama: 'asc' },
+  })
 }

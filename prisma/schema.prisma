@@ -49,9 +49,10 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relasi
-  pengaduan    Pengaduan[]       // Pengaduan yang dibuat user ini
-  statusLog    StatusLog[]       // Log status yang diubah user ini
-  pesan        Pesan[]           // Pesan tanggapan yang dikirim user ini
+  pengaduan       Pengaduan[]       // Pengaduan yang dibuat user ini (sebagai pelapor)
+  tugasPengaduan  Pengaduan[]       @relation("PetugasPengaduan") // Pengaduan yang ditugaskan ke user ini (sebagai admin/petugas)
+  statusLog       StatusLog[]       // Log status yang diubah user ini
+  pesan           Pesan[]           // Pesan tanggapan yang dikirim user ini
 
   @@map("users")
 }
@@ -68,15 +69,18 @@ model Pengaduan {
   kategori        KategoriPengaduan
   status          StatusPengaduan   @default(BARU)
   pelaporId       String            @map("pelapor_id")
+  petugasId       String?           @map("petugas_id") // Petugas sekolah yang ditugaskan
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
 
   // Relasi
   pelapor         User              @relation(fields: [pelaporId], references: [id], onDelete: Cascade)
+  petugas         User?             @relation("PetugasPengaduan", fields: [petugasId], references: [id], onDelete: SetNull)
   statusLogs      StatusLog[]       // Riwayat perubahan status
   pesan           Pesan[]           // Thread percakapan tanggapan
 
   @@index([pelaporId])
+  @@index([petugasId])
   @@index([status])
   @@index([kategori])
   @@index([createdAt])

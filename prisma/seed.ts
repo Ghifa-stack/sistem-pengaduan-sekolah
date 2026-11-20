@@ -66,6 +66,7 @@ async function main() {
       kategori: KategoriPengaduan.KEBERSIHAN,
       status: StatusPengaduan.DIPROSES,
       pelaporId: siswa1.id,
+      petugasId: admin.id,
     },
   })
 
