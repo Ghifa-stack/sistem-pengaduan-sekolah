@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// ENUM DEFINITIONS
+// =============================================
+
+enum Role {
+  PELAPOR  // Siswa / warga sekolah
+  ADMIN    // Petugas / admin sekolah
+}
+
+enum KategoriPengaduan {
+  SARANA_PRASARANA       // Fasilitas, gedung, peralatan
+  AKADEMIK               // Pembelajaran, guru, kurikulum
+  KEBERSIHAN             // Kebersihan lingkungan sekolah
+  KEAMANAN               // Keamanan & ketertiban
+  PELAYANAN_ADMINISTRASI // Tata usaha, surat, administrasi
+  LAINNYA                // Kategori lainnya
+}
+
+enum StatusPengaduan {
+  BARU       // Baru dikirim, belum ditangani
+  DIPROSES   // Sedang dalam proses penanganan
+  SELESAI    // Sudah ditangani dan selesai
+  DITOLAK    // Ditolak dengan alasan
+}
+
+// =============================================
+// TABEL USER
+// =============================================
+
+model User {
+  id           String   @id @default(cuid())
+  nama         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(PELAPOR)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relasi
+  pengaduan    Pengaduan[]       // Pengaduan yang dibuat user ini
+  statusLog    StatusLog[]       // Log status yang diubah user ini
+  pesan        Pesan[]           // Pesan tanggapan yang dikirim user ini
+
+  @@map("users")
+}
+
+// =============================================
+// TABEL PENGADUAN
+// =============================================
+
+model Pengaduan {
+  id              String            @id @default(cuid())
+  nomorTiket      String            @unique @map("nomor_tiket")
+  judul           String
+  deskripsi       String            @db.Text
+  kategori        KategoriPengaduan
+  status          StatusPengaduan   @default(BARU)
+  pelaporId       String            @map("pelapor_id")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  // Relasi
+  pelapor         User              @relation(fields: [pelaporId], references: [id], onDelete: Cascade)
+  statusLogs      StatusLog[]       // Riwayat perubahan status
+  pesan           Pesan[]           // Thread percakapan tanggapan
+
+  @@index([pelaporId])
+  @@index([status])
+  @@index([kategori])
+  @@index([createdAt])
+  @@map("pengaduan")
+}
+
+// =============================================
+// TABEL PESAN (Thread Percakapan)
+// =============================================
+
+model Pesan {
+  id          String    @id @default(cuid())
+  pengaduanId String    @map("pengaduan_id")
+  userId      String    @map("user_id")
+  isi         String    @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relasi
+  pengaduan   Pengaduan @relation(fields: [pengaduanId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([pengaduanId])
+  @@index([createdAt])
+  @@map("pesan")
+}
+
+// =============================================
+// TABEL LOG STATUS (Riwayat Perubahan)
+// =============================================
+
+model StatusLog {
+  id           String          @id @default(cuid())
+  pengaduanId  String          @map("pengaduan_id")
+  statusLama   StatusPengaduan? @map("status_lama")  // null saat pertama dibuat
+  statusBaru   StatusPengaduan  @map("status_baru")
+  catatan      String?          @db.Text              // Alasan/keterangan perubahan
+  userId       String           @map("user_id")       // Siapa yang mengubah
+  createdAt    DateTime         @default(now())        @map("created_at")
+
+  // Relasi
+  pengaduan    Pengaduan        @relation(fields: [pengaduanId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([pengaduanId])
+  @@index([createdAt])
+  @@map("status_logs")
+}
