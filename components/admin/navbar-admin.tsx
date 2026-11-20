@@ -86,12 +86,16 @@ export function NavbarAdmin({ user }: NavbarAdminProps) {
             </Link>
           </Button>
 
-          <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block" />
+          <Button variant="ghost" size="sm" asChild className="gap-1.5 text-gray-600">
+            <Link href="/profil" title="Pengaturan Profil">
+              <span className="hidden lg:inline text-xs font-semibold text-gray-800 mr-1">{user.name}</span>
+              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                Profil
+              </span>
+            </Link>
+          </Button>
 
-          <div className="hidden lg:flex flex-col text-right">
-            <span className="text-xs font-semibold text-gray-800 leading-tight">{user.name}</span>
-            <span className="text-[10px] text-gray-400">{user.email}</span>
-          </div>
+          <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block" />
 
           <Button
             variant="outline"

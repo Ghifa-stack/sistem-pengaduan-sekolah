@@ -7,7 +7,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rute publik (tidak perlu login)
-  const publicRoutes = ['/masuk', '/daftar', '/']
+  const publicRoutes = ['/masuk', '/daftar', '/lupa-sandi', '/']
   const isPublicRoute = publicRoutes.includes(pathname)
 
   // Redirect ke halaman masuk jika belum login dan mengakses halaman yang butuh login
@@ -17,8 +17,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Jika sudah login dan membuka halaman /masuk atau /daftar, arahkan ke dasbor masing-masing
-  if (session && (pathname === '/masuk' || pathname === '/daftar')) {
+  // Jika sudah login dan membuka halaman /masuk, /daftar, atau /lupa-sandi, arahkan ke dasbor masing-masing
+  if (session && (pathname === '/masuk' || pathname === '/daftar' || pathname === '/lupa-sandi')) {
     if (session.user?.role === 'ADMIN') {
       return NextResponse.redirect(new URL('/admin', request.url))
     } else {

@@ -87,6 +87,13 @@ export function NavbarPelapor({ user }: NavbarPelaporProps) {
                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/profil" className="flex items-center w-full">
+                  <User className="w-4 h-4 mr-2 text-gray-500" />
+                  Profil & Pengaturan
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => signOut({ callbackUrl: '/masuk' })}
                 className="text-red-600 cursor-pointer"

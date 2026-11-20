@@ -101,6 +101,12 @@ export default function HalamanMasuk() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Kata Sandi</Label>
+                  <Link
+                    href="/lupa-sandi"
+                    className="text-xs text-blue-600 hover:underline hover:text-blue-800"
+                  >
+                    Lupa kata sandi?
+                  </Link>
                 </div>
                 <Input
                   id="password"

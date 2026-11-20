@@ -43,6 +43,7 @@ model User {
   id           String   @id @default(cuid())
   nama         String
   email        String   @unique
+  telepon      String?  // Kontak telepon/WhatsApp
   passwordHash String   @map("password_hash")
   role         Role     @default(PELAPOR)
   createdAt    DateTime @default(now()) @map("created_at")
