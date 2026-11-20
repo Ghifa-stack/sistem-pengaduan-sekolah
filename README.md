@@ -1,214 +1,297 @@
-# Sistem Layanan Pengaduan Sekolah — SiPengadu
+# 🏫 SiPengadu — Sistem Layanan Pengaduan Sekolah
 
-Aplikasi web pengaduan layanan sekolah berbasis **Next.js 14 + PostgreSQL + Prisma + NextAuth.js**.
+Platform aplikasi web terpadu untuk memudahkan warga sekolah (siswa/guru/wali) menyampaikan keluhan dan aspirasi layanan sekolah secara terstruktur, transparan, dan akuntabel, serta membantu pihak sekolah memprioritaskan perbaikan fasilitas dan mutu layanan.
 
 ---
 
-## 🚀 Cara Menjalankan (Fase 1)
+## 🌟 Gambaran Umum & Fitur Aplikasi
 
-### Prasyarat
-- [Node.js 20+](https://nodejs.org)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- [Git](https://git-scm.com)
+Aplikasi ini dirancang dengan antarmuka yang modern, bersih, mobile-first, dan sepenuhnya berbahasa Indonesia. Terdapat dua peran utama pengguna dalam sistem:
 
-### Langkah Setup
+### 1. 🧑‍🎓 Sisi Pelapor (Siswa / Warga Sekolah)
+- **Akun & Autentikasi Mandiri:** Pendaftaran akun baru, login aman berbasis session JWT, dan pengaturan ulang (reset) kata sandi mandiri jika lupa.
+- **Formulir Pengaduan Cerdas:**
+  - Validasi panjang input judul (min 10) dan deskripsi (min 30).
+  - Pilihan 6 kategori layanan resmi (*Sarana & Prasarana, Akademik, Kebersihan, Keamanan, Pelayanan Administrasi, dan Lainnya*).
+  - Generator Nomor Tiket unik otomatis berformat `ADU-YYYYMM-XXXXX`.
+  - Halaman konfirmasi instan beserta tombol salin nomor tiket.
+- **Dasbor Pengaduan Saya:**
+  - Statistik ringkasan personal (*Total, Menunggu, Diproses, Selesai*).
+  - Pencarian bebas berdasarkan nomor tiket, judul, maupun isi keluhan.
+  - Filter cepat status (*Pills*) dan filter kategori layanan.
+  - Indikator jumlah balasan/tanggapan pada kartu tiket.
+- **Detail & Riwayat Perubahan Status (Timeline):**
+  - Garis waktu kronologis (*Audit Trail*) mencatat kapan status berubah, siapa yang menindaklanjuti, dan catatan penjelasan pihak sekolah.
+- **Thread Percakapan Dua Arah:**
+  - Ruang tanya jawab (*Balas & Tanya Lanjut*) antara pelapor dan petugas sekolah dengan pembeda lencana identitas yang jelas.
+- **Tandai Selesai Mandiri:**
+  - Pelapor dapat mengonfirmasi dan menutup tiket jika fasilitas atau keluhan telah terselesaikan dengan baik.
+- **Pengaturan Profil:**
+  - Pembaruan nama lengkap, nomor kontak/WhatsApp, dan penggantian kata sandi dari dalam akun.
+
+### 2. 🛡️ Sisi Admin / Petugas Sekolah
+- **Dashboard Ringkasan Prioritas (`/admin`):**
+  - 4 Kartu metrik operasional (*Total Pengaduan, Perlu Ditangani/Baru, Sedang Diproses, Selesai*).
+  - Peringatan (*Callout Alert*) tiket baru yang membutuhkan respon cepat.
+  - **Layanan Paling Sering Dilaporkan:** Analitik grafik persentase keluhan terbanyak untuk membantu manajemen sekolah menentukan prioritas anggaran dan perbaikan.
+  - Filter periode waktu (*Hari Ini, 7 Hari Terakhir, Bulan Ini*) dan kategori layanan.
+- **Manajemen Semua Pengaduan (`/admin/pengaduan`):**
+  - Tabel data responsif dengan pagination.
+  - Pencarian multi-kriteria (tiket, judul, nama siswa, email).
+  - **Ekspor Laporan CSV:** Fitur unduh berkas rekapitulasi data keluhan terfilter yang kompatibel dengan Microsoft Excel / Google Sheets.
+- **Tindak Lanjut & Delegasi Penanganan:**
+  - **Ubah Status Tiket:** Mengubah status laporan (*Baru $\rightarrow$ Diproses $\rightarrow$ Selesai / Ditolak*) disertai catatan resmi tindak lanjut yang otomatis tercatat di log audit.
+  - **Penugasan Petugas / Unit:** Mendelegasikan tanggung jawab penanganan tiket ke akun staf sekolah tertentu.
+  - **Kirim Tanggapan Resmi:** Mengirim pesan instruksi atau klarifikasi langsung di thread percakapan dengan lencana khusus *Petugas Sekolah*.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework:** [Next.js 14](https://nextjs.org/) (App Router & Server Actions)
+- **Bahasa:** [TypeScript](https://www.typescriptlang.org/)
+- **Database & ORM:** [PostgreSQL](https://www.postgresql.org/) & [Prisma ORM](https://www.prisma.io/)
+- **Autentikasi:** [NextAuth.js v5](https://authjs.dev/) & [bcryptjs](https://github.com/dcodeIO/bcrypt.js) (Salt 12)
+- **Validasi Data:** [Zod](https://zod.dev/)
+- **Styling & Komponen UI:** [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/) (Radix UI)
+- **Icons:** [Lucide React](https://lucide.dev/)
+- **Containerization:** [Docker & Docker Compose](https://www.docker.com/)
+
+---
+
+## 🗄️ Skema Database
+
+```mermaid
+erDiagram
+    users {
+        string id PK
+        string nama
+        string email UK
+        string telepon
+        string password_hash
+        enum role "PELAPOR | ADMIN"
+        datetime created_at
+        datetime updated_at
+    }
+
+    pengaduan {
+        string id PK
+        string nomor_tiket UK "ADU-YYYYMM-XXXXX"
+        string judul
+        text deskripsi
+        enum kategori "SARANA_PRASARANA | AKADEMIK | KEBERSIHAN | KEAMANAN | PELAYANAN_ADMINISTRASI | LAINNYA"
+        enum status "BARU | DIPROSES | SELESAI | DITOLAK"
+        string pelapor_id FK
+        string petugas_id FK "nullable"
+        datetime created_at
+        datetime updated_at
+    }
+
+    status_logs {
+        string id PK
+        string pengaduan_id FK
+        enum status_lama
+        enum status_baru
+        text catatan
+        string user_id FK
+        datetime created_at
+    }
+
+    pesan {
+        string id PK
+        string pengaduan_id FK
+        string user_id FK
+        text isi
+        datetime created_at
+    }
+
+    users ||--o{ pengaduan : "membuat"
+    users ||--o{ pengaduan : "ditugaskan sebagai PJ"
+    users ||--o{ status_logs : "mencatat log"
+    users ||--o{ pesan : "mengirim pesan"
+    pengaduan ||--o{ status_logs : "riwayat audit"
+    pengaduan ||--o{ pesan : "thread diskusi"
+```
+
+---
+
+## 💻 Panduan Menjalankan di Laptop Sendiri
+
+Ikuti langkah-langkah berikut untuk meng-clone dan menjalankan proyek ini di laptop atau komputer lokal Anda:
+
+### 1. Prasyarat Sistem
+Pastikan laptop Anda sudah terinstall:
+- **Node.js** versi 20.x atau lebih baru ([Unduh Node.js](https://nodejs.org/))
+- **Git** ([Unduh Git](https://git-scm.com/))
+- **Docker Desktop** ([Unduh Docker](https://www.docker.com/products/docker-desktop)) *— direkomendasikan untuk menjalankan database PostgreSQL dengan 1 perintah.*
+
+---
+
+### 2. Clone Repository
+Buka terminal (Git Bash / PowerShell / Terminal macOS) dan clone repository ini:
 
 ```bash
-# 1. Clone atau buka folder proyek
-cd pengaduan-sekolah
+git clone https://github.com/Ghifa-stack/sistem-pengaduan-sekolah.git
+cd sistem-pengaduan-sekolah
+```
 
-# 2. Install dependencies
+---
+
+### 3. Install Dependencies
+Install seluruh paket dependensi Node.js yang dibutuhkan:
+
+```bash
 npm install
+```
 
-# 3. Jalankan database PostgreSQL via Docker
+---
+
+### 4. Konfigurasi Environment Variables (`.env`)
+Salin file template `.env.example` menjadi file `.env`:
+
+```bash
+# Windows PowerShell
+copy .env.example .env
+
+# Linux / macOS / Git Bash
+cp .env.example .env
+```
+
+Pastikan isi file `.env` sesuai dengan konfigurasi lokal Anda:
+```env
+DATABASE_URL="postgresql://pengaduan_user:pengaduan_pass@localhost:5432/pengaduan_sekolah?schema=public"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="super-secret-key-ganti-di-production-32chars"
+NODE_ENV="development"
+```
+
+---
+
+### 5. Jalankan Database PostgreSQL
+Gunakan Docker Compose untuk menjalankan database secara otomatis di background:
+
+```bash
 docker compose up -d postgres
+```
+*(Tunggu sekitar 5-10 detik agar service database siap menerima koneksi).*
 
-# 4. Tunggu ~5 detik, lalu inisialisasi schema
+> 💡 *Catatan:* Jika Anda menggunakan PostgreSQL native (tanpa Docker), pastikan PostgreSQL lokal Anda menyala di port 5432 dan sesuaikan username/password pada `DATABASE_URL` di file `.env`.
+
+---
+
+### 6. Migrasi Skema & Seeding Data Awal
+Inisialisasi tabel database dan masukkan data contoh (akun demo & contoh pengaduan):
+
+```bash
+# Sinkronkan skema tabel ke database
 npm run db:push
 
-# 5. Isi data contoh (seed)
+# Isi data awal (seed akun admin, siswa, dan pengaduan contoh)
 npm run db:seed
-
-# 6. Jalankan aplikasi
-npm run dev
-```
-
-Buka **http://localhost:3000**
-
-### Akun Demo
-
-| Role | Email | Password |
-|------|-------|----------|
-| Siswa (Pelapor) | budi@siswa.id | siswa123 |
-| Siswa (Pelapor) | siti@siswa.id | siswa123 |
-| Admin | admin@sekolah.id | admin123 |
-
----
-
-## 📁 Struktur Proyek
-
-```
-pengaduan-sekolah/
-├── app/
-│   ├── (pelapor)/           # Route group: halaman siswa
-│   │   ├── layout.tsx       # Layout dengan navbar pelapor
-│   │   ├── dasbor/          # Dashboard siswa
-│   │   ├── kirim-pengaduan/ # Form kirim pengaduan
-│   │   └── pengaduan/[id]/  # Detail pengaduan + timeline
-│   ├── admin/               # Halaman admin (dikembangkan Fase 3)
-│   ├── api/auth/            # NextAuth API handler
-│   ├── actions/             # Server Actions (logika bisnis)
-│   ├── daftar/              # Halaman daftar akun
-│   ├── masuk/               # Halaman login
-│   ├── globals.css
-│   └── layout.tsx
-├── components/
-│   ├── ui/                  # shadcn/ui components
-│   └── pelapor/             # Komponen khusus pelapor
-├── lib/
-│   ├── prisma.ts            # Prisma singleton
-│   ├── utils.ts             # cn() helper
-│   └── utils-pengaduan.ts   # Label, warna, format tanggal
-├── prisma/
-│   ├── schema.prisma        # Schema database
-│   └── seed.ts              # Data awal
-├── types/
-│   └── next-auth.d.ts       # Type augmentation
-├── auth.ts                  # Konfigurasi NextAuth
-├── middleware.ts            # Auth & route protection
-├── docker-compose.yml
-└── .env
 ```
 
 ---
 
-## 🗄️ Struktur Database (Fase 1)
-
-### Tabel `users`
-| Kolom | Tipe | Keterangan |
-|-------|------|-----------|
-| id | CUID | Primary key |
-| nama | String | Nama lengkap |
-| email | String UNIQUE | Alamat email |
-| password_hash | String | bcrypt hash |
-| role | Enum | PELAPOR / ADMIN |
-| created_at | DateTime | |
-| updated_at | DateTime | |
-
-### Tabel `pengaduan`
-| Kolom | Tipe | Keterangan |
-|-------|------|-----------|
-| id | CUID | Primary key |
-| nomor_tiket | String UNIQUE | ADU-YYYYMM-XXXXX |
-| judul | String | Judul pengaduan |
-| deskripsi | Text | Isi pengaduan |
-| kategori | Enum | Kategori layanan |
-| status | Enum | BARU/DIPROSES/SELESAI/DITOLAK |
-| pelapor_id | FK → users | |
-| created_at | DateTime | |
-| updated_at | DateTime | |
-
-### Tabel `status_logs`
-| Kolom | Tipe | Keterangan |
-|-------|------|-----------|
-| id | CUID | Primary key |
-| pengaduan_id | FK → pengaduan | |
-| status_lama | Enum? | null saat pertama buat |
-| status_baru | Enum | Status setelah perubahan |
-| catatan | Text? | Keterangan perubahan |
-| user_id | FK → users | Siapa yang mengubah |
-| created_at | DateTime | |
-
----
-
-## 🔗 Halaman & Endpoint (Fase 1)
-
-### Halaman (Pages)
-| URL | Deskripsi | Akses |
-|-----|-----------|-------|
-| `/` | Landing page | Publik |
-| `/daftar` | Form daftar akun | Publik |
-| `/masuk` | Form login | Publik |
-| `/dasbor` | Dashboard pelapor | Pelapor |
-| `/kirim-pengaduan` | Form kirim pengaduan | Pelapor |
-| `/pengaduan/[id]` | Detail + timeline | Pelapor (pemilik) |
-| `/admin` | Dashboard admin (stub) | Admin |
-
-### API Endpoints
-| Endpoint | Metode | Deskripsi |
-|----------|--------|-----------|
-| `/api/auth/[...nextauth]` | GET/POST | NextAuth handler |
-
-### Server Actions
-| Action | Deskripsi |
-|--------|-----------|
-| `daftarAkun()` | Registrasi akun baru |
-| `kirimPengaduan()` | Kirim pengaduan + generate tiket |
-| `getPengaduanSaya()` | Ambil daftar pengaduan pelapor |
-| `getDetailPengaduan()` | Detail pengaduan + status logs |
-
----
-
-## ✅ Checklist Fase 1
-
-### Fitur Utama
-- [x] Form kirim pengaduan (judul + deskripsi)
-- [x] Validasi input (Zod) — judul min 10, deskripsi min 30 karakter
-- [x] Sanitasi input (trim whitespace)
-- [x] Pilih kategori layanan (6 kategori)
-- [x] Generate nomor tiket unik (ADU-YYYYMM-XXXXX)
-- [x] Halaman konfirmasi + salin nomor tiket
-- [x] Log status awal otomatis saat pengaduan dibuat
-
-### Auth & Keamanan
-- [x] Hash password dengan bcrypt (salt 12)
-- [x] Autentikasi JWT via NextAuth.js
-- [x] Proteksi route via middleware
-- [x] Pelapor hanya bisa lihat pengaduannya sendiri
-- [x] Role-based access control (PELAPOR / ADMIN)
-- [x] Redirect otomatis berdasarkan role setelah login
-
-### UI/UX
-- [x] Responsif mobile-first
-- [x] Antarmuka Bahasa Indonesia
-- [x] Counter karakter pada textarea
-- [x] Loading state pada semua tombol submit
-- [x] Pesan error per field yang spesifik
-- [x] Halaman sukses dengan nomor tiket + tombol salin
-- [x] Dasbor dengan statistik pengaduan
-- [x] Timeline riwayat status di halaman detail
-- [x] Landing page dengan CTA
-
-### Database
-- [x] Schema Prisma lengkap (3 tabel)
-- [x] Relasi dan index yang optimal
-- [x] Data seed untuk demo
-- [x] Transaction saat simpan pengaduan + log
-
----
-
-## 🔧 Perintah Berguna
+### 7. Jalankan Server Pengembangan
+Jalankan Next.js development server:
 
 ```bash
-# Jalankan dev server
+npm run dev
+```
+
+Buka browser Anda dan akses:  
+👉 **`http://localhost:3000`**
+
+---
+
+## 🔑 Akun Demo untuk Pengujian
+
+Database seed sudah dilengkapi dengan akun demo siap pakai:
+
+| Peran (Role) | Alamat Email | Kata Sandi | Keterangan |
+|---|---|---|---|
+| **Admin / Petugas Sekolah** | `admin@sekolah.id` | `admin123` | Akses panel `/admin`, kelola semua pengaduan, ubah status, penugasan, dan ekspor CSV |
+| **Siswa / Pelapor 1** | `budi@siswa.id` | `siswa123` | Akses `/dasbor`, memiliki contoh laporan toilet & percakapan |
+| **Siswa / Pelapor 2** | `siti@siswa.id` | `siswa123` | Akses `/dasbor`, memiliki contoh laporan legalisir & keamanan |
+
+---
+
+## 📁 Struktur Direktori Proyek
+
+```text
+sistem-pengaduan-sekolah/
+├── app/
+│   ├── (pelapor)/               # Route group khusus pelapor
+│   │   ├── dasbor/              # Dasbor siswa + filter & search
+│   │   ├── kirim-pengaduan/     # Formulir pengaduan baru
+│   │   ├── layout.tsx           # Layout pelapor + navbar pelapor
+│   │   └── pengaduan/[id]/      # Detail pengaduan, thread pesan & timeline
+│   ├── actions/                 # Server Actions (logika bisnis & database)
+│   │   ├── akun.ts              # Action profil, ubah sandi & reset sandi
+│   │   └── pengaduan.ts         # Action tiket, status, penugasan & filter
+│   ├── admin/                   # Route khusus admin sekolah
+│   │   ├── page.tsx             # Dashboard ringkasan prioritas & statistik
+│   │   └── pengaduan/           # Tabel kelola pengaduan & detail admin
+│   ├── api/                     # Route Handlers API (NextAuth, Ekspor CSV)
+│   ├── daftar/                  # Halaman registrasi akun baru
+│   ├── lupa-sandi/              # Halaman reset kata sandi mandiri
+│   ├── masuk/                   # Halaman login
+│   ├── profil/                  # Halaman profil & pengaturan akun
+│   ├── globals.css              # Konfigurasi Tailwind CSS
+│   ├── layout.tsx               # Root layout & Toaster provider
+│   └── page.tsx                 # Landing page publik
+├── components/
+│   ├── admin/                   # Komponen admin (modal status, penugasan, navbar)
+│   ├── pelapor/                 # Komponen pelapor (filter, thread chat, dialog selesai)
+│   ├── profil/                  # Komponen profil (form edit profil & ubah password)
+│   └── ui/                      # Komponen dasar shadcn/ui (button, dialog, card, dll)
+├── lib/
+│   ├── prisma.ts                # Prisma Client Singleton
+│   ├── utils-pengaduan.ts       # Format tanggal, label status & kategori
+│   └── utils.ts                 # Classname merge (cn) helper
+├── prisma/
+│   ├── schema.prisma            # Skema Prisma database PostgreSQL
+│   └── seed.ts                  # Data seed awal untuk pengujian
+├── auth.ts                      # Konfigurasi otentikasi NextAuth.js
+├── docker-compose.yml           # Konfigurasi container PostgreSQL
+├── middleware.ts                # Proteksi rute berbasis role & session
+└── package.json
+```
+
+---
+
+## 🛡️ Keamanan & Arsitektur
+
+1. **Hashing Kata Sandi:** Semua kata sandi diamankan menggunakan `bcryptjs` dengan *salt cost factor* 12.
+2. **Proteksi Akses Berlapis:**
+   - Server-side middleware memverifikasi status login dan hak akses role (`ADMIN` vs `PELAPOR`).
+   - Server Actions secara ketat memvalidasi kepemilikan tiket sebelum mengizinkan pembaruan data atau pengiriman pesan.
+3. **Validasi & Sanitasi Data:** Semua input formulir divalidasi dengan schema `Zod` untuk mencegah *XSS* dan *malformed data*.
+4. **Audit Trail Lengkap:** Setiap perubahan status pengaduan dicatat ke tabel `status_logs` lengkap dengan ID pelaku perubahan, stempel waktu, dan catatan resmi.
+
+---
+
+## 📜 Perintah Berguna
+
+```bash
+# Menjalankan Next.js di mode development
 npm run dev
 
-# Buka Prisma Studio (GUI database)
+# Membuka Prisma Studio (GUI database berbasis browser)
 npm run db:studio
 
-# Reset database dan seed ulang
+# Reset dan seed ulang database
 npm run db:reset
 
-# Build production
+# Memeriksa pengecekan tipe TypeScript
+npx tsc --noEmit
+
+# Membangun aplikasi untuk production
 npm run build
 ```
 
 ---
 
-## 📅 Roadmap Fase Berikutnya
+## 📄 Lisensi
 
-| Fase | Fitur |
-|------|-------|
-| **Fase 2** | Lacak status, timeline detail, percakapan pelapor-admin |
-| **Fase 3** | Panel admin: kelola pengaduan, ubah status, statistik |
-| **Fase 4** | Manajemen akun, profil, ubah password |
+Proyek ini dibuat untuk keperluan pendidikan dan pengelolaan layanan fasilitas sekolah. Bebas dikembangkan lebih lanjut.
